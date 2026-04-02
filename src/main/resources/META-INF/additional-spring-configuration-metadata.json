@@ -1,0 +1,20 @@
+{
+  "properties": [
+    {
+      "name": "app.jwt.secret",
+      "type": "java.lang.String",
+      "description": "Base64-encoded HMAC-SHA256 signing secret for JWT tokens. Must decode to at least 32 bytes (256 bits) for HS256. Replace with a cryptographically secure random value in production."
+    },
+    {
+      "name": "app.jwt.expiration-ms",
+      "type": "java.lang.Long",
+      "description": "JWT token validity duration in milliseconds. Default is 86400000 (24 hours).",
+      "defaultValue": 86400000
+    },
+    {
+      "name": "app.oauth2.redirect-uri",
+      "type": "java.lang.String",
+      "description": "Frontend URL to redirect to after a successful Google OAuth2 login. The generated JWT is appended as a '?token=<JWT>' query parameter."
+    }
+  ]
+}

@@ -1,15 +1,53 @@
 package com.financedashboard.zorvyn.service.interfaces;
 
+import java.time.LocalDate;
+import java.util.List;
 
+import com.financedashboard.zorvyn.dto.RecordRequest;
+import com.financedashboard.zorvyn.dto.RecordResponse;
+import com.financedashboard.zorvyn.enums.RecordTypeEnum;
+
+/**
+ * Contract for financial record CRUD operations.
+ * The authenticated user's email is passed explicitly — never trust a client-supplied userId.
+ * Role-based data filtering (ADMIN sees all, others see own) is enforced at service layer.
+ */
 public interface FinancialRecordService {
-	
-	public void createRecord();
-	
-	public void readRecordById();
-	
-	public void readAllRecords();
-	
-	public void updateRecordById();
-	
-	public void softDeleteRecord();
+
+    /**
+     * Creates a new financial record owned by the authenticated user.
+     * ANALYST and ADMIN only.
+     */
+    RecordResponse createRecord(RecordRequest request, String userEmail);
+
+    /**
+     * Retrieves all non-deleted records visible to the authenticated user.
+     * ADMIN sees all records; ANALYST/VIEWER see only their own.
+     * Supports optional filters: category, type, date range.
+     */
+    List<RecordResponse> getAllRecords(
+            String userEmail,
+            String category,
+            RecordTypeEnum type,
+            LocalDate from,
+            LocalDate to
+    );
+
+    /**
+     * Retrieves a single record by ID.
+     * ADMIN can fetch any record; ANALYST/VIEWER can only fetch their own.
+     */
+    RecordResponse getRecordById(Long id, String userEmail);
+
+    /**
+     * Updates an existing record.
+     * ADMIN can update any; ANALYST can only update their own.
+     */
+    RecordResponse updateRecord(Long id, RecordRequest request, String userEmail);
+
+    /**
+     * Soft-deletes a record (sets deleted=true).
+     * ADMIN can delete any; ANALYST can only delete their own.
+     */
+    void softDeleteRecord(Long id, String userEmail);
 }

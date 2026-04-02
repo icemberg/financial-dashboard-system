@@ -38,7 +38,11 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(nullable = false)
+    /**
+     * Nullable because Google OAuth2 users have no local password.
+     * Password-based users always have a BCrypt-encoded value here.
+     */
+    @Column(nullable = true)
     private String password;
 
     @Enumerated(EnumType.STRING)

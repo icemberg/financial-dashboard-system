@@ -17,12 +17,16 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Data;
-import lombok.RequiredArgsConstructor;
+import lombok.Builder;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 
 @Data
 @Entity
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
 @Table(name = "financial_records")
-@RequiredArgsConstructor
 public class FinancialRecord {
 
     @Id
@@ -47,11 +51,12 @@ public class FinancialRecord {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
-    private LocalDate updatedAt;
+    private LocalDateTime updatedAt;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "created_by")
     private User createdBy;
 
+    @Builder.Default
     private boolean deleted = false;
 }
