@@ -3,10 +3,12 @@ package com.financedashboard.zorvyn.dto;
 import java.math.BigDecimal;
 
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
+import lombok.RequiredArgsConstructor;
 
-@Getter
+@Data
 @AllArgsConstructor
+@RequiredArgsConstructor
 public class MonthlyTrendResponse {
     private int year;
     private int month;

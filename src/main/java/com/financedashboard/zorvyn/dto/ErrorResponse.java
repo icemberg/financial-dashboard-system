@@ -2,14 +2,16 @@ package com.financedashboard.zorvyn.dto;
 
 import java.time.LocalDateTime;
 
-import com.financedashboard.zorvyn.enums.ErrorCodeEnum;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Standard error response DTO for API responses.
+ * Contains all error information in structured format.
+ */
 @Getter
 @Setter
 @AllArgsConstructor
@@ -20,5 +22,6 @@ public class ErrorResponse {
     private int status;
     private String error;
     private String message;
-    private ErrorCodeEnum code;
+    private String code;  // Numeric error code (e.g., "20001")
 }
+
