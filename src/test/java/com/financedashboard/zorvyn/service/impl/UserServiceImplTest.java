@@ -149,7 +149,6 @@ class UserServiceImplTest {
 
     @Test
     void createUser_wrapException() {
-        when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
         when(passwordEncoder.encode(any())).thenReturn("encoded");
         when(userRepository.save(any())).thenThrow(RuntimeException.class);
 
