@@ -26,6 +26,7 @@ import com.financedashboard.zorvyn.repository.interfaces.UserRepository;
 import com.financedashboard.zorvyn.security.CustomUserDetails;
 import com.financedashboard.zorvyn.security.JwtService;
 import com.financedashboard.zorvyn.service.interfaces.AuthService;
+import com.financedashboard.zorvyn.service.interfaces.EmailService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +52,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final EmailService emailService;
 
     // ── Register ─────────────────────────────────────────────────────────────
 
@@ -296,9 +298,8 @@ public class AuthServiceImpl implements AuthService {
 
             passwordResetTokenRepository.save(token);
 
-            // TODO (production): replace with EmailService.sendPasswordResetEmail(user.getEmail(), tokenValue)
-            log.info("[LOCAL DEV] Password reset token for {} → POST /v1/auth/reset-password with token={}",
-                    request.getEmail(), tokenValue);
+            emailService.sendPasswordResetEmail(user.getEmail(), tokenValue);
+            log.debug("Password reset token generated for email={}", request.getEmail());
         } catch (FinancialDashboardException ex) {
             throw ex;
         } catch (Exception ex) {

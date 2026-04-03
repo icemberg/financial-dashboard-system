@@ -4,9 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,10 +26,11 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Full implementation of financial record CRUD with role-based access control.
  *
- * Data-level access rules (enforced here — defence in depth beyond @PreAuthorize):
- * - ADMIN:   can create/view/update/delete ANY record
+ * Data-level access rules (enforced here — defence in depth
+ * beyond @PreAuthorize):
+ * - ADMIN: can create/view/update/delete ANY record
  * - ANALYST: can create/view/update/delete only THEIR OWN records
- * - VIEWER:  can view only their own records (write ops blocked at controller)
+ * - VIEWER: can view only their own records (write ops blocked at controller)
  */
 @Slf4j
 @Service
@@ -69,8 +68,7 @@ public class FinancialRecordServiceImpl implements FinancialRecordService {
             throw new FinancialDashboardException(
                     ErrorCodeEnum.FINANCIAL_RECORD_CREATION_FAILED.getErrorCode(),
                     ErrorCodeEnum.FINANCIAL_RECORD_CREATION_FAILED.getErrorMessage(),
-                    ErrorCodeEnum.FINANCIAL_RECORD_CREATION_FAILED.getHttpStatus()
-            );
+                    ErrorCodeEnum.FINANCIAL_RECORD_CREATION_FAILED.getHttpStatus());
         }
     }
 
@@ -110,8 +108,7 @@ public class FinancialRecordServiceImpl implements FinancialRecordService {
             throw new FinancialDashboardException(
                     ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getErrorCode(),
                     ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getErrorMessage(),
-                    ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getHttpStatus()
-            );
+                    ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getHttpStatus());
         }
     }
 
@@ -133,8 +130,7 @@ public class FinancialRecordServiceImpl implements FinancialRecordService {
             throw new FinancialDashboardException(
                     ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getErrorCode(),
                     ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getErrorMessage(),
-                    ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getHttpStatus()
-            );
+                    ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getHttpStatus());
         }
     }
 
@@ -164,8 +160,7 @@ public class FinancialRecordServiceImpl implements FinancialRecordService {
             throw new FinancialDashboardException(
                     ErrorCodeEnum.FINANCIAL_RECORD_UPDATE_FAILED.getErrorCode(),
                     ErrorCodeEnum.FINANCIAL_RECORD_UPDATE_FAILED.getErrorMessage(),
-                    ErrorCodeEnum.FINANCIAL_RECORD_UPDATE_FAILED.getHttpStatus()
-            );
+                    ErrorCodeEnum.FINANCIAL_RECORD_UPDATE_FAILED.getHttpStatus());
         }
     }
 
@@ -189,8 +184,7 @@ public class FinancialRecordServiceImpl implements FinancialRecordService {
             throw new FinancialDashboardException(
                     ErrorCodeEnum.FINANCIAL_RECORD_DELETION_FAILED.getErrorCode(),
                     ErrorCodeEnum.FINANCIAL_RECORD_DELETION_FAILED.getErrorMessage(),
-                    ErrorCodeEnum.FINANCIAL_RECORD_DELETION_FAILED.getHttpStatus()
-            );
+                    ErrorCodeEnum.FINANCIAL_RECORD_DELETION_FAILED.getHttpStatus());
         }
     }
 
@@ -203,8 +197,7 @@ public class FinancialRecordServiceImpl implements FinancialRecordService {
                     return new FinancialDashboardException(
                             ErrorCodeEnum.FINANCIAL_RECORD_NOT_FOUND.getErrorCode(),
                             ErrorCodeEnum.FINANCIAL_RECORD_NOT_FOUND.getErrorMessage() + ": id=" + id,
-                            ErrorCodeEnum.FINANCIAL_RECORD_NOT_FOUND.getHttpStatus()
-                    );
+                            ErrorCodeEnum.FINANCIAL_RECORD_NOT_FOUND.getHttpStatus());
                 });
     }
 
@@ -218,8 +211,7 @@ public class FinancialRecordServiceImpl implements FinancialRecordService {
             throw new FinancialDashboardException(
                     ErrorCodeEnum.UNAUTHORIZED_ACCESS.getErrorCode(),
                     "You do not have permission to " + action + " this record.",
-                    ErrorCodeEnum.UNAUTHORIZED_ACCESS.getHttpStatus()
-            );
+                    ErrorCodeEnum.UNAUTHORIZED_ACCESS.getHttpStatus());
         }
     }
 }

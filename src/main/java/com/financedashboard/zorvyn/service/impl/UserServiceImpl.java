@@ -120,7 +120,7 @@ public class UserServiceImpl implements UserService {
     public UserResponse createUser(UserRequest userRequest) {
         log.info("Creating user email={}", userRequest.getEmail());
 
-        if (emailExists(userRequest.getEmail())) {
+        if (isEmailTaken(userRequest.getEmail())) {
             throw new UserException(
                     ErrorCodeEnum.USER_ALREADY_EXISTS.getCode(),
                     ErrorCodeEnum.USER_ALREADY_EXISTS.getErrorMessage() + ": " + userRequest.getEmail(),
@@ -177,7 +177,7 @@ public class UserServiceImpl implements UserService {
 
             if (updateRequest.getEmail() != null && !updateRequest.getEmail().isBlank()
                     && !updateRequest.getEmail().equals(existingUser.getEmail())) {
-                if (emailExists(updateRequest.getEmail())) {
+                if (isEmailTaken(updateRequest.getEmail())) {
                     throw new UserException(
                             ErrorCodeEnum.USER_ALREADY_EXISTS.getErrorCode(),
                             ErrorCodeEnum.USER_ALREADY_EXISTS.getErrorMessage() + ": " + updateRequest.getEmail(),
@@ -275,6 +275,15 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public boolean emailExists(String email) {
+        return isEmailTaken(email);
+    }
+
+    /**
+     * Private helper for email-duplicate checks.
+     * Called internally to avoid Spring proxy self-invocation
+     * (calling a @Transactional method via 'this' bypasses the proxy).
+     */
+    private boolean isEmailTaken(String email) {
         if (email == null || email.isBlank()) return false;
         return userRepository.findByEmail(email).isPresent();
     }
