@@ -46,6 +46,26 @@ public class UserResolutionUtil {
     }
 
     /**
+     * Fetches user by ID or throws FinancialDashboardException if not found.
+     *
+     * @param id the user's ID
+     * @return the User entity if found
+     * @throws FinancialDashboardException if user is not found
+     */
+    public User getUserByIdOrThrow(Long id) {
+        log.debug("Resolving user by ID: {}", id);
+        return userRepository.findById(id)
+                .orElseThrow(() -> {
+                    log.warn("User not found for ID: {}", id);
+                    return new FinancialDashboardException(
+                            "User not found for ID: " + id,
+                            ErrorCodeEnum.USER_NOT_FOUND,
+                            HttpStatus.NOT_FOUND
+                    );
+                });
+    }
+
+    /**
      * Resolves the userId filter based on user role.
      * ADMIN users get null (see all records), non-admin users get filtered by their ID.
      * Implements row-level security through this filter.

@@ -12,7 +12,7 @@ import com.financedashboard.zorvyn.entity.User;
 import com.financedashboard.zorvyn.enums.*;
 import com.financedashboard.zorvyn.exception.UserException;
 import com.financedashboard.zorvyn.repository.interfaces.UserRepository;
-
+import com.financedashboard.zorvyn.service.impl.UserServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

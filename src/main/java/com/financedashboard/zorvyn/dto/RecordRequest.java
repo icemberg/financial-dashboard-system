@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.financedashboard.zorvyn.enums.RecordTypeEnum;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -46,4 +47,11 @@ public class RecordRequest {
     /** Optional description or memo for the transaction. */
     @Size(max = 500, message = "Notes must not exceed 500 characters")
     private String notes;
+
+    /** 
+     * Optional ID of the user who will own the record. 
+     * Defaults to the authenticated user. Required if Admin creates a record for an Analyst.
+     */
+    @Schema(description = "Optional ID of the user who will own the record (ADMIN only)", example = "2")
+    private Long userId;
 }

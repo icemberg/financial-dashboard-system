@@ -46,7 +46,20 @@ public class FinancialRecordServiceImpl implements FinancialRecordService {
         log.info("Creating financial record for user={}", userEmail);
 
         try {
-            User owner = userResolutionUtil.getUserOrThrow(userEmail);
+            User authenticatedUser = userResolutionUtil.getUserOrThrow(userEmail);
+            User owner;
+
+            if (request.getUserId() != null) {
+                if (authenticatedUser.getRole() != RolesEnum.ADMIN) {
+                    throw new FinancialDashboardException(
+                            ErrorCodeEnum.UNAUTHORIZED_ACCESS.getErrorCode(),
+                            "Only ADMIN can specify the owner of a record",
+                            ErrorCodeEnum.UNAUTHORIZED_ACCESS.getHttpStatus());
+                }
+                owner = userResolutionUtil.getUserByIdOrThrow(request.getUserId());
+            } else {
+                owner = authenticatedUser;
+            }
 
             FinancialRecord record = FinancialRecord.builder()
                     .amount(request.getAmount())

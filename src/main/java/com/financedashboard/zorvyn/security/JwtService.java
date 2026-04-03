@@ -19,8 +19,10 @@ import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Handles all JWT operations: token generation, validation, and claim extraction.
- * Uses HS256 with a 256-bit (minimum) base64-encoded secret from application properties.
+ * Handles all JWT operations: token generation, validation, and claim
+ * extraction.
+ * Uses HS256 with a 256-bit (minimum) base64-encoded secret from application
+ * properties.
  * Embeds role and userId as custom claims to avoid extra DB lookups in filters.
  */
 @Slf4j
@@ -52,7 +54,10 @@ public class JwtService {
                 .compact();
     }
 
-    /** Extracts the email (subject) from a JWT without throwing — returns null on failure. */
+    /**
+     * Extracts the email (subject) from a JWT without throwing — returns null on
+     * failure.
+     */
     public String extractEmail(String token) {
         try {
             return extractClaim(token, Claims::getSubject);
@@ -62,7 +67,10 @@ public class JwtService {
         }
     }
 
-    /** Returns true if the token is valid (signature OK, not expired, email matches). */
+    /**
+     * Returns true if the token is valid (signature OK, not expired, email
+     * matches).
+     */
     public boolean isTokenValid(String token, UserDetails userDetails) {
         try {
             final String email = extractClaim(token, Claims::getSubject);
@@ -75,7 +83,10 @@ public class JwtService {
         }
     }
 
-    /** Returns the configured expiry in milliseconds — used in AuthResponse.expiresIn. */
+    /**
+     * Returns the configured expiry in milliseconds — used in
+     * AuthResponse.expiresIn.
+     */
     public long getExpirationMs() {
         return jwtExpirationMs;
     }

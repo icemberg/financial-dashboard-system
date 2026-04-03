@@ -14,7 +14,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
-
+import com.financedashboard.zorvyn.service.impl.AuthServiceImpl;
 import com.financedashboard.zorvyn.dto.*;
 import com.financedashboard.zorvyn.entity.PasswordResetToken;
 import com.financedashboard.zorvyn.entity.User;

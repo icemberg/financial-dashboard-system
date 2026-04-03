@@ -107,6 +107,15 @@
 │  │                     REPOSITORY LAYER                                │ │
 │  │  (Spring Data JPA + custom @Query JPQL)                             │ │
 │  │                                                                     │ │
+│  │  FinancialRecordController.java — /v1/records                       │ │
+│  │  ────────────────────────────────────────────                       │ │
+│  │  @PreAuthorize:                                                     │ │
+│  │  POST   /          ADMIN         → recordService.createRecord(req,email) 201│ │
+│  │  GET    /          ANALYST|ADMIN → recordService.getAllRecords(...)      200 │ │
+│  │  GET    /{id}      ANALYST|ADMIN → recordService.getRecordById(id,email) 200 │ │
+│  │  PATCH  /{id}      ADMIN         → recordService.updateRecord(id,r,e)    200 │ │
+│  │  DELETE /{id}      ADMIN         → recordService.softDeleteRecord(id,e)  204 │ │
+│  │                                                                     │ │
 │  │  ┌────────────────┐  ┌──────────────────────────┐                  │ │
 │  │  │ UserRepository  │  │ FinancialRecordRepository │                  │ │
 │  │  │ • findByEmail   │  │ • findAllByFilters        │                  │ │
@@ -577,9 +586,9 @@ Signature:  HMACSHA256(base64(header) + "." + base64(payload), secret)
 
 #### `POST /v1/records`
 
-**Access:** ANALYST, ADMIN
+**Access:** ADMIN
 
-**Description:** Creates a new financial record. Ownership is set server-side from the JWT — the client cannot supply a userId.
+**Description:** Creates a new financial record. By default, ownership is set server-side from the JWT of the ADMIN creating the record. An ADMIN may optionally specify `userId` to bind the record to another user (e.g., an ANALYST).
 
 **Request Body:**
 ```json
@@ -588,7 +597,8 @@ Signature:  HMACSHA256(base64(header) + "." + base64(payload), secret)
   "type": "EXPENSE",                // required: INCOME or EXPENSE
   "category": "Food",               // required, max 100 chars
   "transactionDate": "2024-12-15",  // required, YYYY-MM-DD, must be ≤ today
-  "notes": "Dinner with team"       // optional, max 500 chars
+  "notes": "Dinner with team",      // optional, max 500 chars
+  "userId": 2                       // optional, assigns ownership to specific target user
 }
 ```
 
@@ -601,7 +611,7 @@ Signature:  HMACSHA256(base64(header) + "." + base64(payload), secret)
   "category": "Food",
   "transactionDate": "2024-12-15",
   "notes": "Dinner with team",
-  "createdBy": 5,
+  "createdBy": 2,
   "createdAt": "2024-12-15T18:30:00"
 }
 ```
@@ -679,7 +689,7 @@ GET /v1/records?type=INCOME
 
 #### `PATCH /v1/records/{id}`
 
-**Access:** ANALYST (own records only), ADMIN (any record)
+**Access:** ADMIN
 
 **Request Body:** Same shape as `POST /v1/records` (full replacement of all fields).
 
@@ -689,7 +699,7 @@ GET /v1/records?type=INCOME
 
 #### `DELETE /v1/records/{id}`
 
-**Access:** ANALYST (own records only), ADMIN (any record)
+**Access:** ADMIN
 
 **Description:** Soft-deletes the record (`deleted = true`). The record is never physically removed.
 
@@ -844,10 +854,10 @@ GET /v1/records?type=INCOME
 │    DELETE /users/{id}   → hasRole('ADMIN')                       │
 │                                                                  │
 │  FinancialRecordController:                                      │
-│    POST /records        → hasRole('ANALYST') or hasRole('ADMIN') │
-│    GET /records         → any authenticated                      │
-│    PATCH /records/{id}  → hasRole('ANALYST') or hasRole('ADMIN') │
-│    DELETE /records/{id} → hasRole('ANALYST') or hasRole('ADMIN') │
+│    POST /records        → hasRole('ADMIN')                       │
+│    GET /records         → hasRole('ANALYST') or hasRole('ADMIN') │
+│    PATCH /records/{id}  → hasRole('ADMIN')                       │
+│    DELETE /records/{id} → hasRole('ADMIN')                       │
 │                                                                  │
 │  Result: Wrong role → 403 Forbidden (structured ErrorResponse)   │
 └──────────────────────────────┬───────────────────────────────────┘
@@ -882,11 +892,11 @@ GET /v1/records?type=INCOME
 | `PATCH /v1/users/{id}` | ✅ own only | ✅ own only | ✅ any |
 | `PATCH /v1/users/{id}/status` | ❌ 403 | ❌ 403 | ✅ |
 | `DELETE /v1/users/{id}` | ❌ 403 | ❌ 403 | ✅ |
-| `POST /v1/records` | ❌ 403 | ✅ | ✅ |
+| `POST /v1/records` | ❌ 403 | ❌ 403 | ✅ |
 | `GET /v1/records` | ✅ own only | ✅ own only | ✅ all |
 | `GET /v1/records/{id}` | ✅ own only | ✅ own only | ✅ any |
-| `PATCH /v1/records/{id}` | ❌ 403 | ✅ own only | ✅ any |
-| `DELETE /v1/records/{id}` | ❌ 403 | ✅ own only | ✅ any |
+| `PATCH /v1/records/{id}` | ❌ 403 | ❌ 403 | ✅ any |
+| `DELETE /v1/records/{id}` | ❌ 403 | ❌ 403 | ✅ any |
 | `GET /v1/dashboard/*` | ✅ own data | ✅ own data | ✅ all data |
 
 ---
