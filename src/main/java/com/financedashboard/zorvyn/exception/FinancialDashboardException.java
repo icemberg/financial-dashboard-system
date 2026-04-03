@@ -11,16 +11,16 @@ import com.financedashboard.zorvyn.enums.ErrorCodeEnum;
 public class FinancialDashboardException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
-	private final ErrorCodeEnum code;
+    private final ErrorCodeEnum code;
     private final HttpStatus status;
-    private String errorCode; // Numeric error code (e.g., "20001")
+    private final String errorCode; // Numeric error code (e.g., "20001")
 
     /**
      * Constructor with message, error code enum, and HTTP status.
      *
      * @param message the error message
-     * @param code the error code from ErrorCodeEnum
-     * @param status the HTTP status to return
+     * @param code    the error code from ErrorCodeEnum
+     * @param status  the HTTP status to return
      */
     public FinancialDashboardException(String message, ErrorCodeEnum code, HttpStatus status) {
         super(message);
@@ -34,8 +34,8 @@ public class FinancialDashboardException extends RuntimeException {
      * Used for structured error format with numeric codes.
      *
      * @param errorCode the numeric error code (e.g., "20001")
-     * @param message the detailed error message
-     * @param status the HTTP status to return
+     * @param message   the detailed error message
+     * @param status    the HTTP status to return
      */
     public FinancialDashboardException(String errorCode, String message, HttpStatus status) {
         super(message);
@@ -49,9 +49,9 @@ public class FinancialDashboardException extends RuntimeException {
      * Used for structured error format with numeric codes and error code enum.
      *
      * @param errorCode the numeric error code (e.g., "20001")
-     * @param message the detailed error message
-     * @param status the HTTP status to return
-     * @param code the ErrorCodeEnum for backward compatibility
+     * @param message   the detailed error message
+     * @param status    the HTTP status to return
+     * @param code      the ErrorCodeEnum for backward compatibility
      */
     public FinancialDashboardException(String errorCode, String message, HttpStatus status, ErrorCodeEnum code) {
         super(message);

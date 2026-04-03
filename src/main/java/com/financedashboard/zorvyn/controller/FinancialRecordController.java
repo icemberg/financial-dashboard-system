@@ -1,8 +1,10 @@
 package com.financedashboard.zorvyn.controller;
 
 import java.time.LocalDate;
-import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,43 +20,61 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.financedashboard.zorvyn.dto.ErrorResponse;
 import com.financedashboard.zorvyn.dto.RecordRequest;
 import com.financedashboard.zorvyn.dto.RecordResponse;
 import com.financedashboard.zorvyn.enums.RecordTypeEnum;
 import com.financedashboard.zorvyn.service.interfaces.FinancialRecordService;
 import com.financedashboard.zorvyn.service.util.AuthenticationHelper;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * REST controller for financial record CRUD operations.
+ * REST controller for financial record CRUD — /v1/records
  *
  * Access control:
- *  - VIEWER:  GET only (own records — enforced at service/data level)
- *  - ANALYST: GET + POST + PATCH + DELETE (own records)
- *  - ADMIN:   Full access to all records
+ *   VIEWER:  GET only (own records)
+ *   ANALYST: GET + POST + PATCH + DELETE (own records)
+ *   ADMIN:   Full access to all records
  *
- * The authenticated user's email is extracted from the JWT via Authentication object.
- * The client never supplies a userId — ownership is always resolved server-side.
- *
- * Base path: /v1/records
+ * GET /v1/records supports pagination:
+ *   page    — 0-based page index (default: 0)
+ *   size    — records per page, max 100 (default: 20)
+ *   sortBy  — field name to sort by (default: transactionDate)
+ *   sortDir — asc or desc (default: desc)
  */
 @Slf4j
 @RestController
 @RequestMapping("/v1/records")
 @RequiredArgsConstructor
+@Tag(name = "Financial Records", description = "CRUD operations for income/expense records with pagination and filtering")
 public class FinancialRecordController {
 
     private final FinancialRecordService financialRecordService;
     private final AuthenticationHelper authenticationHelper;
 
-    /**
-     * POST /v1/records
-     * Creates a new financial record owned by the authenticated user.
-     * Access: ANALYST, ADMIN
-     */
+    @Operation(
+            summary = "Create a financial record",
+            description = "Creates a new income or expense record. Ownership is set server-side from the JWT — "
+                    + "the client cannot supply a userId. Amount must be positive, transaction date cannot be in the future."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Record created",
+                    content = @Content(schema = @Schema(implementation = RecordResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation failed",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Caller is VIEWER (cannot create)",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @PostMapping
     @PreAuthorize("hasRole('ANALYST') or hasRole('ADMIN')")
     public ResponseEntity<RecordResponse> createRecord(
@@ -68,37 +88,77 @@ public class FinancialRecordController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    /**
-     * GET /v1/records
-     * Returns records visible to the authenticated user.
-     * ADMIN sees all; ANALYST/VIEWER see only their own.
-     * Supports optional filters: category, type, from (date), to (date).
-     * Access: All authenticated roles
-     */
+    @Operation(
+            summary = "List financial records (paginated)",
+            description = "Returns a paginated, filtered list of records. ADMIN sees all records; "
+                    + "ANALYST/VIEWER see only their own. Soft-deleted records are excluded. "
+                    + "All filter parameters are optional and combinable."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Records retrieved")
+    })
     @GetMapping
-    public ResponseEntity<List<RecordResponse>> getAllRecords(
+    public ResponseEntity<Page<RecordResponse>> getAllRecords(
+            @Parameter(description = "Filter by exact category match", example = "Food")
             @RequestParam(required = false) String category,
+
+            @Parameter(description = "Filter by record type", example = "EXPENSE")
             @RequestParam(required = false) RecordTypeEnum type,
+
+            @Parameter(description = "Start date inclusive (YYYY-MM-DD)", example = "2024-01-01")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+
+            @Parameter(description = "End date inclusive (YYYY-MM-DD)", example = "2024-12-31")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+
+            @Parameter(description = "Page number (0-based)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+
+            @Parameter(description = "Page size (max 100)", example = "20")
+            @RequestParam(defaultValue = "20") int size,
+
+            @Parameter(description = "Field to sort by", example = "transactionDate")
+            @RequestParam(defaultValue = "transactionDate") String sortBy,
+
+            @Parameter(description = "Sort direction: asc or desc", example = "desc")
+            @RequestParam(defaultValue = "desc") String sortDir,
+
             Authentication authentication) {
 
         String userEmail = authenticationHelper.extractUserEmailOrThrow(authentication);
-        log.debug("GET /v1/records — user={}, category={}, type={}, from={}, to={}",
-                userEmail, category, type, from, to);
 
-        List<RecordResponse> records = financialRecordService.getAllRecords(userEmail, category, type, from, to);
-        return ResponseEntity.ok(records);
+        // Cap page size at 100 to prevent accidental full-table fetches
+        int effectiveSize = Math.min(size, 100);
+        Sort sort = sortDir.equalsIgnoreCase("asc")
+                ? Sort.by(sortBy).ascending()
+                : Sort.by(sortBy).descending();
+        PageRequest pageable = PageRequest.of(page, effectiveSize, sort);
+
+        log.debug("GET /v1/records — user={}, page={}, size={}, sortBy={} {}, filters: category={}, type={}, from={}, to={}",
+                userEmail, page, effectiveSize, sortBy, sortDir, category, type, from, to);
+
+        Page<RecordResponse> result = financialRecordService.getAllRecords(
+                userEmail, category, type, from, to, pageable);
+
+        return ResponseEntity.ok(result);
     }
 
-    /**
-     * GET /v1/records/{id}
-     * Returns a single record.
-     * Access: All authenticated roles (data-level ownership enforced in service)
-     */
+    @Operation(
+            summary = "Get a record by ID",
+            description = "Returns a single non-deleted record. Service enforces ownership — "
+                    + "non-ADMIN users can only view their own records."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Record found",
+                    content = @Content(schema = @Schema(implementation = RecordResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Not owner and not ADMIN",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Record not found or soft-deleted",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @GetMapping("/{id}")
     public ResponseEntity<RecordResponse> getRecordById(
-            @PathVariable Long id,
+            @Parameter(description = "Record ID", example = "1") @PathVariable Long id,
             Authentication authentication) {
 
         String userEmail = authenticationHelper.extractUserEmailOrThrow(authentication);
@@ -108,15 +168,24 @@ public class FinancialRecordController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * PATCH /v1/records/{id}
-     * Updates a financial record. Full update (all fields required).
-     * Access: ANALYST (own), ADMIN (any)
-     */
+    @Operation(
+            summary = "Update a financial record",
+            description = "Replaces all fields of a record. ANALYST can only update their own records; ADMIN can update any."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Record updated",
+                    content = @Content(schema = @Schema(implementation = RecordResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation failed",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Not owner and not ADMIN, or caller is VIEWER",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Record not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @PatchMapping("/{id}")
     @PreAuthorize("hasRole('ANALYST') or hasRole('ADMIN')")
     public ResponseEntity<RecordResponse> updateRecord(
-            @PathVariable Long id,
+            @Parameter(description = "Record ID", example = "1") @PathVariable Long id,
             @Valid @RequestBody RecordRequest request,
             Authentication authentication) {
 
@@ -127,15 +196,22 @@ public class FinancialRecordController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * DELETE /v1/records/{id}
-     * Soft-deletes a record (sets deleted=true, record is never purged from DB).
-     * Access: ANALYST (own), ADMIN (any)
-     */
+    @Operation(
+            summary = "Soft-delete a financial record",
+            description = "Sets deleted=true on the record. The record is never physically removed, "
+                    + "preserving the financial audit trail. ANALYST can only delete their own records."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Record soft-deleted"),
+            @ApiResponse(responseCode = "403", description = "Not owner and not ADMIN, or caller is VIEWER",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Record not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ANALYST') or hasRole('ADMIN')")
     public ResponseEntity<Void> deleteRecord(
-            @PathVariable Long id,
+            @Parameter(description = "Record ID", example = "1") @PathVariable Long id,
             Authentication authentication) {
 
         String userEmail = authenticationHelper.extractUserEmailOrThrow(authentication);

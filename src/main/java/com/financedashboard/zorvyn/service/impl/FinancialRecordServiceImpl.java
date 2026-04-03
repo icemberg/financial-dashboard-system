@@ -2,8 +2,11 @@ package com.financedashboard.zorvyn.service.impl;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,13 +28,10 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Full implementation of financial record CRUD with role-based access control.
  *
- * Data-level access rules (enforced here, not just at the endpoint level):
- * - ADMIN: can create/view/update/delete ANY record
+ * Data-level access rules (enforced here — defence in depth beyond @PreAuthorize):
+ * - ADMIN:   can create/view/update/delete ANY record
  * - ANALYST: can create/view/update/delete only THEIR OWN records
- * - VIEWER: can view only their own records (write operations blocked at controller via @PreAuthorize)
- *
- * Authenticated user identity is always resolved from the JWT-extracted email,
- * never from client-supplied values.
+ * - VIEWER:  can view only their own records (write ops blocked at controller)
  */
 @Slf4j
 @Service
@@ -42,126 +42,164 @@ public class FinancialRecordServiceImpl implements FinancialRecordService {
     private final FinancialRecordRepository financialRecordRepository;
     private final UserResolutionUtil userResolutionUtil;
 
-    /**
-     * Creates a record owned by the authenticated user.
-     * The createdBy field is set server-side from the JWT — the client cannot forge ownership.
-     */
     @Override
     public RecordResponse createRecord(RecordRequest request, String userEmail) {
         log.info("Creating financial record for user={}", userEmail);
 
-        User owner = userResolutionUtil.getUserOrThrow(userEmail);
+        try {
+            User owner = userResolutionUtil.getUserOrThrow(userEmail);
 
-        FinancialRecord record = FinancialRecord.builder()
-                .amount(request.getAmount())
-                .type(request.getType())
-                .category(request.getCategory())
-                .transactionDate(request.getTransactionDate())
-                .notes(request.getNotes())
-                .createdBy(owner)
-                .createdAt(LocalDateTime.now())
-                .build();
+            FinancialRecord record = FinancialRecord.builder()
+                    .amount(request.getAmount())
+                    .type(request.getType())
+                    .category(request.getCategory())
+                    .transactionDate(request.getTransactionDate())
+                    .notes(request.getNotes())
+                    .createdBy(owner)
+                    .createdAt(LocalDateTime.now())
+                    .build();
 
-        FinancialRecord saved = financialRecordRepository.save(record);
-        log.info("Financial record created: id={}, user={}", saved.getId(), userEmail);
-        return RecordResponse.fromEntity(saved);
+            FinancialRecord saved = financialRecordRepository.save(record);
+            log.info("Financial record created: id={}, user={}", saved.getId(), userEmail);
+            return RecordResponse.fromEntity(saved);
+        } catch (FinancialDashboardException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Unexpected error creating financial record for user={}", userEmail, ex);
+            throw new FinancialDashboardException(
+                    ErrorCodeEnum.FINANCIAL_RECORD_CREATION_FAILED.getErrorCode(),
+                    ErrorCodeEnum.FINANCIAL_RECORD_CREATION_FAILED.getErrorMessage(),
+                    ErrorCodeEnum.FINANCIAL_RECORD_CREATION_FAILED.getHttpStatus()
+            );
+        }
     }
 
     /**
-     * Returns all non-deleted records visible to the user.
+     * Returns a paginated list of non-deleted records visible to the user.
      * ADMIN gets all records (userId filter = null); others get only their own.
+     * Default sort: transactionDate DESC, createdAt DESC (applied via Pageable).
      */
     @Override
     @Transactional(readOnly = true)
-    public List<RecordResponse> getAllRecords(
+    public Page<RecordResponse> getAllRecords(
             String userEmail,
             String category,
             RecordTypeEnum type,
             LocalDate from,
-            LocalDate to) {
+            LocalDate to,
+            Pageable pageable) {
 
-        log.debug("Fetching records for user={}, category={}, type={}, from={}, to={}",
-                userEmail, category, type, from, to);
+        log.debug("Fetching records for user={}, category={}, type={}, from={}, to={}, page={}",
+                userEmail, category, type, from, to, pageable.getPageNumber());
 
-        User user = userResolutionUtil.getUserOrThrow(userEmail);
-        Long userIdFilter = userResolutionUtil.resolveUserIdFilter(user); // null for ADMIN
+        try {
+            User user = userResolutionUtil.getUserOrThrow(userEmail);
+            Long userIdFilter = userResolutionUtil.resolveUserIdFilter(user); // null for ADMIN
 
-        List<FinancialRecord> records = financialRecordRepository
-                .findAllByFilters(userIdFilter, category, type, from, to);
+            Page<FinancialRecord> page = financialRecordRepository
+                    .findAllByFilters(userIdFilter, category, type, from, to, pageable);
 
-        log.debug("Found {} records for user={}", records.size(), userEmail);
-        return records.stream().map(RecordResponse::fromEntity).toList();
+            log.debug("Found {} records (page {}/{}) for user={}",
+                    page.getNumberOfElements(), page.getNumber(), page.getTotalPages(), userEmail);
+
+            return page.map(RecordResponse::fromEntity);
+        } catch (FinancialDashboardException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Unexpected error fetching records for user={}", userEmail, ex);
+            throw new FinancialDashboardException(
+                    ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getErrorCode(),
+                    ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getErrorMessage(),
+                    ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getHttpStatus()
+            );
+        }
     }
 
-    /**
-     * Fetches a single record by ID.
-     * Applies ownership check: non-ADMIN users can only see their own records.
-     */
     @Override
     @Transactional(readOnly = true)
     public RecordResponse getRecordById(Long id, String userEmail) {
         log.debug("Fetching record id={} for user={}", id, userEmail);
 
-        FinancialRecord record = findActiveRecordOrThrow(id);
-        User requester = userResolutionUtil.getUserOrThrow(userEmail);
+        try {
+            FinancialRecord record = findActiveRecordOrThrow(id);
+            User requester = userResolutionUtil.getUserOrThrow(userEmail);
+            enforceOwnership(record, requester, "view");
 
-        enforceOwnership(record, requester, "view");
-
-        return RecordResponse.fromEntity(record);
+            return RecordResponse.fromEntity(record);
+        } catch (FinancialDashboardException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Unexpected error fetching record id={} for user={}", id, userEmail, ex);
+            throw new FinancialDashboardException(
+                    ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getErrorCode(),
+                    ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getErrorMessage(),
+                    ErrorCodeEnum.FINANCIAL_RECORD_FETCH_FAILED.getHttpStatus()
+            );
+        }
     }
 
-    /**
-     * Updates fields of an existing record.
-     * Ownership check runs before any modification — non-ADMIN cannot update others' records.
-     */
     @Override
     public RecordResponse updateRecord(Long id, RecordRequest request, String userEmail) {
         log.info("Updating record id={} for user={}", id, userEmail);
 
-        FinancialRecord record = findActiveRecordOrThrow(id);
-        User requester = userResolutionUtil.getUserOrThrow(userEmail);
+        try {
+            FinancialRecord record = findActiveRecordOrThrow(id);
+            User requester = userResolutionUtil.getUserOrThrow(userEmail);
+            enforceOwnership(record, requester, "update");
 
-        enforceOwnership(record, requester, "update");
+            record.setAmount(request.getAmount());
+            record.setType(request.getType());
+            record.setCategory(request.getCategory());
+            record.setTransactionDate(request.getTransactionDate());
+            record.setNotes(request.getNotes());
+            record.setUpdatedAt(LocalDateTime.now());
 
-        record.setAmount(request.getAmount());
-        record.setType(request.getType());
-        record.setCategory(request.getCategory());
-        record.setTransactionDate(request.getTransactionDate());
-        record.setNotes(request.getNotes());
-        record.setUpdatedAt(LocalDateTime.now());
-
-        FinancialRecord updated = financialRecordRepository.save(record);
-        log.info("Record id={} updated successfully by user={}", id, userEmail);
-        return RecordResponse.fromEntity(updated);
+            FinancialRecord updated = financialRecordRepository.save(record);
+            log.info("Record id={} updated by user={}", id, userEmail);
+            return RecordResponse.fromEntity(updated);
+        } catch (FinancialDashboardException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Unexpected error updating record id={} for user={}", id, userEmail, ex);
+            throw new FinancialDashboardException(
+                    ErrorCodeEnum.FINANCIAL_RECORD_UPDATE_FAILED.getErrorCode(),
+                    ErrorCodeEnum.FINANCIAL_RECORD_UPDATE_FAILED.getErrorMessage(),
+                    ErrorCodeEnum.FINANCIAL_RECORD_UPDATE_FAILED.getHttpStatus()
+            );
+        }
     }
 
-    /**
-     * Soft-deletes a record by setting deleted=true.
-     * The record remains in the database for audit purposes but is excluded from all queries.
-     * Ownership check prevents non-ADMIN users from deleting others' records.
-     */
     @Override
     public void softDeleteRecord(Long id, String userEmail) {
         log.info("Soft-deleting record id={} for user={}", id, userEmail);
 
-        FinancialRecord record = findActiveRecordOrThrow(id);
-        User requester = userResolutionUtil.getUserOrThrow(userEmail);
+        try {
+            FinancialRecord record = findActiveRecordOrThrow(id);
+            User requester = userResolutionUtil.getUserOrThrow(userEmail);
+            enforceOwnership(record, requester, "delete");
 
-        enforceOwnership(record, requester, "delete");
-
-        record.setDeleted(true);
-        record.setUpdatedAt(LocalDateTime.now());
-        financialRecordRepository.save(record);
-        log.info("Record id={} soft-deleted by user={}", id, userEmail);
+            record.setDeleted(true);
+            record.setUpdatedAt(LocalDateTime.now());
+            financialRecordRepository.save(record);
+            log.info("Record id={} soft-deleted by user={}", id, userEmail);
+        } catch (FinancialDashboardException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Unexpected error soft-deleting record id={} for user={}", id, userEmail, ex);
+            throw new FinancialDashboardException(
+                    ErrorCodeEnum.FINANCIAL_RECORD_DELETION_FAILED.getErrorCode(),
+                    ErrorCodeEnum.FINANCIAL_RECORD_DELETION_FAILED.getErrorMessage(),
+                    ErrorCodeEnum.FINANCIAL_RECORD_DELETION_FAILED.getHttpStatus()
+            );
+        }
     }
 
     // ── Private Helpers ───────────────────────────────────────────────────────
 
-    /** Fetches a non-deleted record or throws 404. */
     private FinancialRecord findActiveRecordOrThrow(Long id) {
         return financialRecordRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> {
-                    log.warn("Record not found or deleted: id={}", id);
+                    log.warn("Record not found or soft-deleted: id={}", id);
                     return new FinancialDashboardException(
                             ErrorCodeEnum.FINANCIAL_RECORD_NOT_FOUND.getErrorCode(),
                             ErrorCodeEnum.FINANCIAL_RECORD_NOT_FOUND.getErrorMessage() + ": id=" + id,
@@ -170,14 +208,9 @@ public class FinancialRecordServiceImpl implements FinancialRecordService {
                 });
     }
 
-    /**
-     * Enforces data-level ownership.
-     * ADMIN bypasses ownership checks and can act on any record.
-     * ANALYST/VIEWER can only act on records they created.
-     */
     private void enforceOwnership(FinancialRecord record, User requester, String action) {
         if (requester.getRole() == RolesEnum.ADMIN) {
-            return; // ADMIN has full access to all records
+            return;
         }
         if (!record.getCreatedBy().getId().equals(requester.getId())) {
             log.warn("Ownership check failed: user={} attempted to {} record id={}",

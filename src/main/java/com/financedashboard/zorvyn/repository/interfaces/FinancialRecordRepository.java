@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -56,20 +57,27 @@ public interface FinancialRecordRepository extends JpaRepository<FinancialRecord
     Optional<FinancialRecord> findByIdAndDeletedFalse(Long id);
 
     /**
-     * Filtered list query supporting all optional params.
+     * Paginated, filtered list query.
      * ADMIN passes userId=null to see all records; others pass their own ID.
+     * countQuery is required for correct total-count calculation when using @Query with Pageable.
      */
-    @Query("SELECT fr FROM FinancialRecord fr WHERE fr.deleted = false " +
-           "AND (:userId IS NULL OR fr.createdBy.id = :userId) " +
-           "AND (:category IS NULL OR fr.category = :category) " +
-           "AND (:type IS NULL OR fr.type = :type) " +
-           "AND (:startDate IS NULL OR fr.transactionDate >= :startDate) " +
-           "AND (:endDate IS NULL OR fr.transactionDate <= :endDate) " +
-           "ORDER BY fr.transactionDate DESC, fr.createdAt DESC")
-    List<FinancialRecord> findAllByFilters(
+    @Query(value = "SELECT fr FROM FinancialRecord fr WHERE fr.deleted = false " +
+                   "AND (:userId IS NULL OR fr.createdBy.id = :userId) " +
+                   "AND (:category IS NULL OR fr.category = :category) " +
+                   "AND (:type IS NULL OR fr.type = :type) " +
+                   "AND (:startDate IS NULL OR fr.transactionDate >= :startDate) " +
+                   "AND (:endDate IS NULL OR fr.transactionDate <= :endDate)",
+           countQuery = "SELECT COUNT(fr) FROM FinancialRecord fr WHERE fr.deleted = false " +
+                        "AND (:userId IS NULL OR fr.createdBy.id = :userId) " +
+                        "AND (:category IS NULL OR fr.category = :category) " +
+                        "AND (:type IS NULL OR fr.type = :type) " +
+                        "AND (:startDate IS NULL OR fr.transactionDate >= :startDate) " +
+                        "AND (:endDate IS NULL OR fr.transactionDate <= :endDate)")
+    Page<FinancialRecord> findAllByFilters(
             @Param("userId") Long userId,
             @Param("category") String category,
             @Param("type") RecordTypeEnum type,
             @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate);
+            @Param("endDate") LocalDate endDate,
+            Pageable pageable);
 }

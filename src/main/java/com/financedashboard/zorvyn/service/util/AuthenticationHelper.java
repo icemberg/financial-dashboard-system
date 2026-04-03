@@ -1,25 +1,38 @@
 package com.financedashboard.zorvyn.service.util;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
+
+import com.financedashboard.zorvyn.enums.ErrorCodeEnum;
+import com.financedashboard.zorvyn.exception.FinancialDashboardException;
 
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Utility service for extracting and validating authentication details.
- * Responsible for handling authentication-related concerns outside of controllers.
- * Follows Single Responsibility Principle by isolating authentication logic.
+ * Utility for extracting and validating the authenticated user's email from the
+ * SecurityContext.
+ *
+ * Bug #4 fix: extractUserEmailOrThrow() previously threw unchecked
+ * IllegalArgumentException,
+ * which bypassed GlobalExceptionHandler and returned a raw 500. It now throws
+ * FinancialDashboardException with UNAUTHORIZED (401), which is handled
+ * correctly.
  */
 @Slf4j
 @Component
 public class AuthenticationHelper {
 
     /**
-     * Safely extracts user email (principal name) from Authentication object.
-     * Handles null authentication and logs unauthenticated access attempts.
+     * Safely extracts the user's email (principal name) from the Authentication
+     * object.
+     * Returns null if not authenticated — callers that need a guaranteed email
+     * should
+     * use extractUserEmailOrThrow() instead.
      *
-     * @param authentication the Spring Security Authentication object
-     * @return user email if authenticated, null otherwise
+     * @param authentication the Spring Security Authentication from the
+     *                       SecurityContext
+     * @return user email, or null if authentication is absent
      */
     public String extractUserEmail(Authentication authentication) {
         if (authentication == null) {
@@ -27,27 +40,43 @@ public class AuthenticationHelper {
             return null;
         }
         String userEmail = authentication.getName();
-        log.info("Extracted user email from authentication: {}", userEmail);
+        log.debug("Extracted user email from authentication: {}", userEmail);
         return userEmail;
     }
 
     /**
-     * Validates that authentication is present and returns the user email.
-     * Throws exception if authentication is null or email is empty.
+     * Extracts the user's email and throws a structured 401 if authentication is missing/invalid.
      *
-     * @param authentication the Spring Security Authentication object
-     * @return user email
-     * @throws IllegalArgumentException if authentication is missing or invalid
+     * Bug #4 fix: throws FinancialDashboardException (handled by GlobalExceptionHandler → 401)
+     * instead of the previous IllegalArgumentException (unhandled → raw 500).
+     *
+     * @param authentication the Spring Security Authentication from the SecurityContext
+     * @return user email (guaranteed non-null, non-blank)
+     * @throws FinancialDashboardException 401 UNAUTHORIZED if authentication is null or email is blank
      */
     public String extractUserEmailOrThrow(Authentication authentication) {
         if (authentication == null) {
-            throw new IllegalArgumentException("Authentication is required but was null");
+            log.warn("Authentication object is null — rejecting request with 401");
+            throw new FinancialDashboardException(
+                    ErrorCodeEnum.UNAUTHORIZED.getErrorCode(),
+                    ErrorCodeEnum.UNAUTHORIZED.getErrorMessage(),
+                    HttpStatus.UNAUTHORIZED
+            );
         }
+
         String userEmail = authentication.getName();
+
         if (userEmail == null || userEmail.isBlank()) {
-            throw new IllegalArgumentException("User email cannot be extracted from authentication");
+            log.warn("Authentication present but email is blank — rejecting request with 401");
+            throw new FinancialDashboardException(
+                    ErrorCodeEnum.UNAUTHORIZED.getErrorCode(),
+                    "Unable to resolve authenticated user identity.",
+                    HttpStatus.UNAUTHORIZED
+            );
         }
-        log.info("Validated user email from authentication: {}", userEmail);
+
+        log.debug("Validated user email from authentication: {}", userEmail);
+
         return userEmail;
     }
 }

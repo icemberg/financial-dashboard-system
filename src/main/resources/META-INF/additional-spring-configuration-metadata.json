@@ -12,6 +12,11 @@
       "defaultValue": 86400000
     },
     {
+      "name": "app.cors.allowed-origins",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Comma-separated list of origins allowed to make cross-origin requests to the API. Example: http://localhost:3000,https://yourapp.com. Injected into SecurityConfig.corsConfigurationSource()."
+    },
+    {
       "name": "app.oauth2.redirect-uri",
       "type": "java.lang.String",
       "description": "Frontend URL to redirect to after a successful Google OAuth2 login. The generated JWT is appended as a '?token=<JWT>' query parameter."

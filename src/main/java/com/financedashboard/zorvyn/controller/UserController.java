@@ -14,249 +14,173 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.financedashboard.zorvyn.dto.ErrorResponse;
+import com.financedashboard.zorvyn.dto.StatusUpdateRequest;
 import com.financedashboard.zorvyn.dto.UserRequest;
 import com.financedashboard.zorvyn.dto.UserResponse;
-import com.financedashboard.zorvyn.enums.UserStatusEnum;
+import com.financedashboard.zorvyn.dto.UserUpdateRequest;
 import com.financedashboard.zorvyn.service.interfaces.UserService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * REST Controller for User Management endpoints.
- * Provides endpoints for CRUD operations on users with role-based access control.
+ * REST Controller for User Management — /v1/users
  *
- * Base Path: /v1/users
- * Security: All endpoints require authentication and appropriate roles.
- *
- * Endpoints:
- * - GET    /v1/users           → Fetch all users (ADMIN only)
- * - GET    /v1/users/{id}      → Fetch user by ID (ADMIN or own user)
- * - POST   /v1/users           → Create new user (ADMIN only)
- * - PATCH  /v1/users/{id}      → Update user details (ADMIN or own user)
- * - PATCH  /v1/users/{id}/status → Update user status (ADMIN only)
- * - DELETE /v1/users/{id}      → Delete user (ADMIN only)
+ * Access control per endpoint:
+ *   GET    /v1/users           → ADMIN only
+ *   GET    /v1/users/{id}      → ADMIN or own profile
+ *   POST   /v1/users           → ADMIN only
+ *   PATCH  /v1/users/{id}      → ADMIN or own profile
+ *   PATCH  /v1/users/{id}/status → ADMIN only
+ *   DELETE /v1/users/{id}      → ADMIN only
  */
 @Slf4j
 @RestController
 @RequestMapping("/v1/users")
+@RequiredArgsConstructor
+@Tag(name = "User Management", description = "CRUD operations for user accounts. Most endpoints require ADMIN role.")
 public class UserController {
 
     private final UserService userService;
 
-    /**
-     * Constructor for dependency injection.
-     *
-     * @param userService the user service implementation
-     */
-    public UserController(UserService userService) {
-        this.userService = userService;
-    }
-
-    /**
-     * GET /v1/users
-     * Fetch all users in the system.
-     *
-     * Security: ADMIN only
-     * HTTP Status:
-     * - 200 OK: Successfully retrieved all users
-     * - 403 FORBIDDEN: User is not ADMIN
-     *
-     * Response: List<UserResponse> with all users (password excluded)
-     *
-     * @return ResponseEntity with list of all users
-     */
+    @Operation(
+            summary = "List all users",
+            description = "Returns all users in the system. Password is never included in the response."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Users retrieved successfully"),
+            @ApiResponse(responseCode = "403", description = "Caller is not ADMIN",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<UserResponse>> getAllUsers() {
-        log.info("API request: GET /v1/users - Fetch all users");
-        List<UserResponse> users = userService.getAllUsers();
-        log.info("Successfully retrieved {} users", users.size());
-        return ResponseEntity.ok(users);
+        log.info("GET /v1/users");
+        return ResponseEntity.ok(userService.getAllUsers());
     }
 
-    /**
-     * GET /v1/users/{id}
-     * Fetch a specific user by ID.
-     *
-     * Security:
-     * - ADMIN can fetch any user
-     * - Non-admin users can fetch only their own data
-     * - Uses SpEL expression: hasRole('ADMIN') or #id == authentication.principal.userId
-     *
-     * HTTP Status:
-     * - 200 OK: User found and returned
-     * - 403 FORBIDDEN: Unauthorized access (not ADMIN and not own ID)
-     * - 404 NOT_FOUND: User with given ID does not exist
-     *
-     * @param id the user ID to fetch
-     * @return ResponseEntity with UserResponse
-     */
+    @Operation(
+            summary = "Get user by ID",
+            description = "Returns a single user. ADMIN can fetch any user; non-ADMIN users can only fetch their own profile."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "User found",
+                    content = @Content(schema = @Schema(implementation = UserResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Not ADMIN and not own profile",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "User not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
-        log.info("API request: GET /v1/users/{} - Fetch user by ID", id);
-        UserResponse user = userService.getUserById(id);
-        log.info("User retrieved successfully with id={}", id);
-        return ResponseEntity.ok(user);
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.userId")
+    public ResponseEntity<UserResponse> getUserById(
+            @Parameter(description = "User ID", example = "1") @PathVariable Long id) {
+        log.info("GET /v1/users/{}", id);
+        return ResponseEntity.ok(userService.getUserById(id));
     }
 
-    /**
-     * POST /v1/users
-     * Create a new user in the system.
-     *
-     * Security: ADMIN only
-     * Validation: UserRequest is validated using @Valid annotation
-     *
-     * Business Logic:
-     * - Validates all input fields (name, email, password, role, status)
-     * - Checks for duplicate email
-     * - Encrypts password using BCrypt
-     * - Sets createdAt timestamp
-     * - Saves to database
-     * - Returns created user without password
-     *
-     * HTTP Status:
-     * - 201 CREATED: User created successfully
-     * - 400 BAD_REQUEST: Validation failed (invalid email, short password, etc.)
-     * - 403 FORBIDDEN: User is not ADMIN
-     * - 409 CONFLICT: Email already exists (duplicate email)
-     *
-     * Request Body: UserRequest
-     * {
-     *   "name": "John Doe",
-     *   "email": "john@example.com",
-     *   "password": "SecurePass123!",
-     *   "role": "ADMIN",
-     *   "status": "ACTIVE"
-     * }
-     *
-     * @param userRequest the user creation request
-     * @return ResponseEntity with created UserResponse and 201 status
-     */
+    @Operation(
+            summary = "Create a new user (ADMIN only)",
+            description = "Creates a user with any role (VIEWER, ANALYST, ADMIN) and status. "
+                    + "This is the only way to create ANALYST or ADMIN accounts. "
+                    + "Self-registration via /v1/auth/register always assigns VIEWER."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "User created",
+                    content = @Content(schema = @Schema(implementation = UserResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation failed or password too weak",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Caller is not ADMIN",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Email already exists",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody UserRequest userRequest) {
-        log.info("API request: POST /v1/users - Create user with email={}", userRequest.getEmail());
-        UserResponse createdUser = userService.createUser(userRequest);
-        log.info("User created successfully with id={}", createdUser.getId());
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
+        log.info("POST /v1/users — email={}", userRequest.getEmail());
+        UserResponse created = userService.createUser(userRequest);
+        log.info("User created: id={}", created.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
-    /**
-     * PATCH /v1/users/{id}
-     * Update an existing user's details.
-     *
-     * Security:
-     * - ADMIN can update any user
-     * - Non-admin users can update only their own profile
-     *
-     * Business Logic:
-     * - Performs partial update (only provided fields are updated)
-     * - Validates input fields
-     * - Checks for duplicate email if email is changed
-     * - Prevents role escalation for non-admin users
-     * - Sets updatedAt timestamp
-     * - Does NOT update password (use separate endpoint)
-     *
-     * HTTP Status:
-     * - 200 OK: User updated successfully
-     * - 400 BAD_REQUEST: Validation failed
-     * - 403 FORBIDDEN: Unauthorized access
-     * - 404 NOT_FOUND: User not found
-     * - 409 CONFLICT: Email already in use
-     *
-     * Request Body: UserRequest (partial, only fields to update needed)
-     * {
-     *   "name": "Jane Doe",
-     *   "email": "jane@example.com"
-     * }
-     *
-     * @param id the user ID to update
-     * @param userRequest the update request with new values
-     * @return ResponseEntity with updated UserResponse
-     */
+    @Operation(
+            summary = "Partially update a user",
+            description = "Updates only the non-null, non-blank fields provided in the request. "
+                    + "Password is NOT updated here — use PATCH /v1/auth/change-password. "
+                    + "ADMIN can update any user; non-ADMIN can only update their own profile."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "User updated",
+                    content = @Content(schema = @Schema(implementation = UserResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Not ADMIN and not own profile",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "User not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "New email already taken",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @PatchMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.userId")
     public ResponseEntity<UserResponse> updateUser(
-            @PathVariable Long id,
-            @Valid @RequestBody UserRequest userRequest) {
-        log.info("API request: PATCH /v1/users/{} - Update user", id);
-        UserResponse updatedUser = userService.updateUser(id, userRequest);
-        log.info("User updated successfully with id={}", id);
-        return ResponseEntity.ok(updatedUser);
+            @Parameter(description = "User ID", example = "1") @PathVariable Long id,
+            @Valid @RequestBody UserUpdateRequest updateRequest) {
+        log.info("PATCH /v1/users/{}", id);
+        UserResponse updated = userService.updateUser(id, updateRequest);
+        log.info("User updated: id={}", id);
+        return ResponseEntity.ok(updated);
     }
 
-    /**
-     * PATCH /v1/users/{id}/status
-     * Update a user's account status (activate/deactivate).
-     *
-     * Security: ADMIN only
-     *
-     * Business Logic:
-     * - Updates only the status field
-     * - Accepts UserStatusEnum: ACTIVE or INACTIVE
-     * - ACTIVE users can access the system
-     * - INACTIVE users are locked out
-     * - Sets updatedAt timestamp
-     *
-     * HTTP Status:
-     * - 200 OK: Status updated successfully
-     * - 400 BAD_REQUEST: Invalid status provided
-     * - 403 FORBIDDEN: User is not ADMIN
-     * - 404 NOT_FOUND: User not found
-     *
-     * Request Body: UserRequest with only status field
-     * {
-     *   "status": "INACTIVE"
-     * }
-     *
-     * @param id the user ID to update
-     * @param userRequest containing the status field
-     * @return ResponseEntity with updated UserResponse
-     */
+    @Operation(
+            summary = "Update user status (ADMIN only)",
+            description = "Changes the user's status to ACTIVE or INACTIVE. Inactive users cannot log in."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Status updated",
+                    content = @Content(schema = @Schema(implementation = UserResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Caller is not ADMIN",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "User not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<UserResponse> updateUserStatus(
-            @PathVariable Long id,
-            @Valid @RequestBody UserRequest userRequest) {
-        log.info("API request: PATCH /v1/users/{}/status - Update user status to={}", id, userRequest.getStatus());
-
-        // Validate that status is provided
-        if (userRequest.getStatus() == null) {
-            log.warn("Status update request missing status field");
-            throw new com.financedashboard.zorvyn.exception.UserException(
-                    "Status must be provided",
-                    com.financedashboard.zorvyn.enums.ErrorCodeEnum.INVALID_USER_INPUT
-            );
-        }
-
-        UserResponse updatedUser = userService.updateUserStatus(id, userRequest.getStatus());
-        log.info("User status updated successfully with id={}", id);
-        return ResponseEntity.ok(updatedUser);
+            @Parameter(description = "User ID", example = "1") @PathVariable Long id,
+            @Valid @RequestBody StatusUpdateRequest request) {
+        log.info("PATCH /v1/users/{}/status → {}", id, request.getStatus());
+        UserResponse updated = userService.updateUserStatus(id, request.getStatus());
+        log.info("User status updated: id={}", id);
+        return ResponseEntity.ok(updated);
     }
 
-    /**
-     * DELETE /v1/users/{id}
-     * Delete a user from the system.
-     *
-     * Security: ADMIN only
-     * Note: In production, soft delete (with isDeleted flag) is recommended.
-     *
-     * HTTP Status:
-     * - 204 NO_CONTENT: User deleted successfully
-     * - 403 FORBIDDEN: User is not ADMIN
-     * - 404 NOT_FOUND: User not found
-     *
-     * @param id the user ID to delete
-     * @return ResponseEntity with 204 NO_CONTENT status
-     */
+    @Operation(
+            summary = "Delete a user (ADMIN only)",
+            description = "Permanently removes a user from the database. This is a hard delete and cannot be undone."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "User deleted"),
+            @ApiResponse(responseCode = "403", description = "Caller is not ADMIN",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "User not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
-        log.info("API request: DELETE /v1/users/{} - Delete user", id);
+    public ResponseEntity<Void> deleteUser(
+            @Parameter(description = "User ID", example = "1") @PathVariable Long id) {
+        log.info("DELETE /v1/users/{}", id);
         userService.deleteUser(id);
-        log.info("User deleted successfully with id={}", id);
+        log.info("User deleted: id={}", id);
         return ResponseEntity.noContent().build();
     }
 }
