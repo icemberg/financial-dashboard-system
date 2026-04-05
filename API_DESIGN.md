@@ -1096,6 +1096,4 @@ WHERE deleted = false
 
 This approach avoids dynamic query building while supporting all filter combinations efficiently.
 
----
 
-*Document generated for the Zorvyn Finance Dashboard Backend — a backend development assignment submission.*

@@ -7,6 +7,7 @@ A production-grade backend system for a finance dashboard where users interact w
 ## Table of Contents
 
 - [Overview](#overview)
+- [Live Deployment](#live-deployment)
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
@@ -42,6 +43,15 @@ Zorvyn is a finance dashboard backend that provides:
 | **Google OAuth2** | Auto-registration on first Google login, JWT issued on callback |
 | **Structured Error Codes** | 40+ categorized error codes with consistent JSON error responses |
 | **Profile-Based Config** | Separate `local` and `prod` property files for environment isolation |
+
+---
+
+## Live Deployment
+
+The API is deployed and live on **Render**. You can explore and test the API directly via the Swagger UI:
+
+- **Swagger UI (Interactive Docs)**: [https://financial-dashboard-system.onrender.com/swagger-ui/index.html](https://financial-dashboard-system.onrender.com/swagger-ui/index.html)
+- **Base API URL**: `https://financial-dashboard-system.onrender.com/v1`
 
 ---
 
