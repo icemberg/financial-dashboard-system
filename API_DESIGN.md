@@ -620,9 +620,9 @@ Signature:  HMACSHA256(base64(header) + "." + base64(payload), secret)
 
 #### `GET /v1/records`
 
-**Access:** All authenticated roles
+**Access:** ANALYST | ADMIN
 
-**Description:** Returns a paginated, filtered list of records. ADMIN sees all records; other roles see only their own. Soft-deleted records are excluded.
+**Description:** Returns a paginated, filtered list of records. ADMIN sees all records; ANALYST sees only their own. VIEWER cannot access this endpoint. Soft-deleted records are excluded.
 
 **Query Parameters:**
 
@@ -681,7 +681,9 @@ GET /v1/records?type=INCOME
 
 #### `GET /v1/records/{id}`
 
-**Access:** All authenticated roles (ownership enforced — non-ADMIN sees only own records)
+**Access:** ANALYST | ADMIN (ownership enforced — non-ADMIN sees only own records)
+
+**Description:** Returns a single non-deleted record. ANALYST can only view their own records; ADMIN can view any record. VIEWER cannot access this endpoint.
 
 **Success Response (200 OK):** Single `RecordResponse` object.
 
@@ -856,6 +858,7 @@ GET /v1/records?type=INCOME
 │  FinancialRecordController:                                      │
 │    POST /records        → hasRole('ADMIN')                       │
 │    GET /records         → hasRole('ANALYST') or hasRole('ADMIN') │
+│    GET /records/{id}    → hasRole('ANALYST') or hasRole('ADMIN') │
 │    PATCH /records/{id}  → hasRole('ADMIN')                       │
 │    DELETE /records/{id} → hasRole('ADMIN')                       │
 │                                                                  │
@@ -893,8 +896,8 @@ GET /v1/records?type=INCOME
 | `PATCH /v1/users/{id}/status` | ❌ 403 | ❌ 403 | ✅ |
 | `DELETE /v1/users/{id}` | ❌ 403 | ❌ 403 | ✅ |
 | `POST /v1/records` | ❌ 403 | ❌ 403 | ✅ |
-| `GET /v1/records` | ✅ own only | ✅ own only | ✅ all |
-| `GET /v1/records/{id}` | ✅ own only | ✅ own only | ✅ any |
+| `GET /v1/records` | ❌ 403 | ✅ own only | ✅ all |
+| `GET /v1/records/{id}` | ❌ 403 | ✅ own only | ✅ any |
 | `PATCH /v1/records/{id}` | ❌ 403 | ❌ 403 | ✅ any |
 | `DELETE /v1/records/{id}` | ❌ 403 | ❌ 403 | ✅ any |
 | `GET /v1/dashboard/*` | ✅ own data | ✅ own data | ✅ all data |

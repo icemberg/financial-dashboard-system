@@ -763,8 +763,8 @@ curl -X POST http://localhost:8080/v1/auth/register \
 | Method | Endpoint | Access | Description |
 |---|---|---|---|
 | `POST` | `/v1/records` | ADMIN | Create a record (with optional userId assignment) |
-| `GET` | `/v1/records` | All roles | List records (paginated, filtered) |
-| `GET` | `/v1/records/{id}` | All roles (own records) | Get single record |
+| `GET` | `/v1/records` | ANALYST \| ADMIN | List records (paginated, filtered) |
+| `GET` | `/v1/records/{id}` | ANALYST \| ADMIN | Get single record |
 | `PATCH` | `/v1/records/{id}` | ADMIN | Update a record (ALL fields replaced) |
 | `DELETE` | `/v1/records/{id}` | ADMIN | Soft-delete a record |
 
