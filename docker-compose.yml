@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # --- Backend Service ---
+  zorvyn-backend:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # Database Connection (linked to 'db' container)
+      - DB_URL=jdbc:mysql://db:3306/finance_dashboard?useSSL=false&allowPublicKeyRetrieval=true
+      - DB_USERNAME=zorvyn_user
+      - DB_PASSWORD=zorvyn_pass
+      
+      # Security (Must match Google Cloud Console)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - JWT_SECRET=dG9rZW5TZWNyZXRLZXlGb3Jab3J2eW5GaW5hbmNlRGFzaGJvYXJkU3lzdGVtITIwMjQ=
+      
+      # Frontend Redirection
+      - OAUTH2_REDIRECT_URI=http://localhost:3000/oauth2/callback
+      
+      # Mail Configuration (Example: Gmail SMTP)
+      - MAIL_HOST=smtp.gmail.com
+      - MAIL_PORT=587
+      - MAIL_USERNAME=YOUR_EMAIL@gmail.com
+      - MAIL_PASSWORD=YOUR_APP_PASSWORD
+      - MAIL_FROM_ADDRESS=noreply@zorvyn.com
+      - PASSWORD_RESET_BASE_URL=http://localhost:3000/reset-password
+      
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # --- Database Service ---
+  db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      - MYSQL_DATABASE=finance_dashboard
+      - MYSQL_USER=zorvyn_user
+      - MYSQL_PASSWORD=zorvyn_pass
+      - MYSQL_ROOT_PASSWORD=root_pass
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data:
